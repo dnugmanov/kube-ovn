@@ -1209,11 +1209,12 @@ func (c *Controller) handleDeletePod(key string) (err error) {
 				// This is needed when IP CR is deleted without finalizer (race condition)
 				c.updateSubnetStatusQueue.Add(podNet.Subnet.Name)
 			}
-		}
-		if pod.Annotations[util.VipAnnotation] != "" {
-			if err = c.releaseVip(pod.Annotations[util.VipAnnotation]); err != nil {
-				klog.Errorf("failed to clean label from vip %s, %v", pod.Annotations[util.VipAnnotation], err)
-				return err
+			vip := pod.Annotations[fmt.Sprintf(util.VipAnnotationTemplate, podNet.ProviderName)]
+			if vip != "" {
+				if err = c.releaseVip(vip); err != nil {
+					klog.Errorf("failed to clean label from vip %s, %v", vip, err)
+					return err
+				}
 			}
 		}
 	}
@@ -1994,7 +1995,7 @@ func (c *Controller) acquireAddress(pod *v1.Pod, podNet *kubeovnNet) (string, st
 	var checkVMPod bool
 	isStsPod, _, _ := isStatefulSetPod(pod)
 	// if pod has static vip
-	vipName := pod.Annotations[util.VipAnnotation]
+	vipName := pod.Annotations[fmt.Sprintf(util.VipAnnotationTemplate, podNet.ProviderName)]
 	if vipName != "" {
 		vip, err := c.virtualIpsLister.Get(vipName)
 		if err != nil {
@@ -2005,6 +2006,13 @@ func (c *Controller) acquireAddress(pod *v1.Pod, podNet *kubeovnNet) (string, st
 			checkVMPod, _ = isVMPod(pod)
 		}
 		if err = c.podReuseVip(vipName, portName, isStsPod || checkVMPod); err != nil {
+			return "", "", "", podNet.Subnet, err
+		}
+		// Register the VIP's IP in IPAM under the pod's port name
+		ipStr := util.GetStringIP(vip.Status.V4ip, vip.Status.V6ip)
+		mac := vip.Status.Mac
+		if _, _, _, err = c.ipam.GetStaticAddress(key, portName, ipStr, &mac, podNet.Subnet.Name, false); err != nil {
+			klog.Errorf("failed to register vip ip %s in IPAM for pod %s: %v", ipStr, key, err)
 			return "", "", "", podNet.Subnet, err
 		}
 		return vip.Status.V4ip, vip.Status.V6ip, vip.Status.Mac, podNet.Subnet, nil

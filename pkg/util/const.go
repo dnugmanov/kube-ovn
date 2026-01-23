@@ -87,6 +87,7 @@ const (
 	VfRepresentorNameTemplate       = "%s.kubernetes.io/vf_representor"
 	VfNameTemplate                  = "%s.kubernetes.io/vf"
 	ActivationStrategyTemplate      = "%s.kubernetes.io/activation_strategy"
+	VipAnnotationTemplate           = "%s.kubernetes.io/vip"
 
 	ProviderNetworkTemplate           = "%s.kubernetes.io/provider_network"
 	ProviderNetworkErrMessageTemplate = "%s.provider-network.kubernetes.io/err_mesg"
